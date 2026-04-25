@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1D9E75">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="事業所図鑑">
+<title>事業所図鑑</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/dist/index.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3/dist/jszip.min.js"></script>
+<style>
+:root{
+  --primary:#1D9E75;--primary-dk:#168a64;--primary-lt:#e6f5f0;
+  --danger:#e53e3e;--warn:#d97706;--info:#2563eb;
+  --bg:#f0f2f5;--bg2:#e4e8ed;--card:#fff;--input:#fff;
+  --text:#111827;--text2:#6b7280;--border:#d1d5db;
+  --shadow:0 2px 12px rgba(0,0,0,.08);--shadow2:0 8px 32px rgba(0,0,0,.14);
+  --r:12px;--r2:20px;
+  --hh:56px;--th:44px;
+  --sat:env(safe-area-inset-top,0px);
+  --sab:env(safe-area-inset-bottom,0px);
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#0d1117;--bg2:#161b22;--card:#1c2128;--input:#22272e;
+    --text:#e6edf3;--text2:#8b949e;--border:#30363d;
+    --primary-lt:#0d2618;--shadow:0 2px 12px rgba(0,0,0,.4);--shadow2:0 8px 32px rgba(0,0,0,.6);
+  }
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%;height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Hiragino Sans',Meiryo,sans-serif;
+  background:var(--bg);color:var(--text);height:100%;overflow:hidden}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select,textarea{font-family:inherit}
+a{color:var(--primary);text-decoration:none}
+
+/* ─── LOADING ─── */
+#s-load{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:var(--bg);gap:16px;z-index:9999}
+.spin{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--primary);
+  border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ─── LOGIN ─── */
+#s-login{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+  background:var(--bg);padding:24px}
+#s-login.show{display:flex}
+.login-card{background:var(--card);border-radius:var(--r2);padding:40px 32px;
+  box-shadow:var(--shadow2);max-width:360px;width:100%;text-align:center}
+.login-logo{width:72px;height:72px;background:var(--primary);border-radius:18px;margin:0 auto 20px;
+  display:flex;align-items:center;justify-content:center;font-size:36px}
+.login-title{font-size:24px;font-weight:700;margin-bottom:6px}
+.login-sub{font-size:14px;color:var(--text2);margin-bottom:32px}
+.btn-ms{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;
+  padding:14px;background:#0078d4;color:#fff;border-radius:8px;font-size:15px;font-weight:600;
+  transition:background .15s}
+.btn-ms:hover,.btn-ms:active{background:#006cc1}
+.btn-ms svg{flex-shrink:0}
+
+/* ─── MAIN SCREEN ─── */
+#s-main{position:fixed;inset:0;display:none;flex-direction:column}
+#s-main.show{display:flex}
+header{height:var(--hh);padding-top:var(--sat);background:var(--primary);color:#fff;
+  display:flex;align-items:center;padding-left:16px;padding-right:8px;gap:8px;
+  position:relative;z-index:50;flex-shrink:0}
+.hdr-title{font-size:17px;font-weight:700;flex:1}
+.hdr-user{font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.85}
+.hdr-btn{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:18px;color:#fff;opacity:.85;transition:opacity .15s}
+.hdr-btn:hover,.hdr-btn:active{opacity:1;background:rgba(255,255,255,.15)}
+
+/* ─── TABS ─── */
+.tabs{display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;
+  scrollbar-width:none;background:var(--card);border-bottom:1px solid var(--border);flex-shrink:0}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex-shrink:0;padding:0 14px;height:var(--th);font-size:13px;font-weight:500;
+  color:var(--text2);border-bottom:3px solid transparent;transition:all .15s;white-space:nowrap}
+.tab.active{color:var(--primary);border-bottom-color:var(--primary);font-weight:700}
+
+/* ─── SEARCH ROW ─── */
+.search-row{display:flex;gap:8px;padding:10px 12px;background:var(--card);
+  border-bottom:1px solid var(--border);flex-shrink:0}
+.search-wrap{flex:1;position:relative;display:flex;align-items:center}
+.search-wrap svg{position:absolute;left:10px;color:var(--text2);pointer-events:none}
+.search-input{width:100%;padding:8px 10px 8px 36px;border:1.5px solid var(--border);border-radius:8px;
+  font-size:15px;background:var(--input);color:var(--text);transition:border-color .15s}
+.search-input:focus{outline:none;border-color:var(--primary)}
+.btn-filter{padding:0 14px;height:36px;border-radius:8px;font-size:13px;font-weight:600;
+  border:1.5px solid var(--border);color:var(--text);background:var(--input);transition:all .15s;white-space:nowrap}
+.btn-filter.active{background:var(--primary-lt);border-color:var(--primary);color:var(--primary)}
+
+/* ─── FILTER PANEL ─── */
+#filter-panel{background:var(--card);border-bottom:1px solid var(--border);
+  padding:12px;display:none;flex-shrink:0;overflow-y:auto;max-height:220px}
+#filter-panel.show{display:block}
+.filter-section{margin-bottom:12px}
+.filter-label{font-size:12px;font-weight:700;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
+.chip-row{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:500;border:1.5px solid var(--border);
+  cursor:pointer;background:var(--bg);color:var(--text);transition:all .15s}
+.chip.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.toggle-chip{padding:6px 12px;border-radius:999px;font-size:12px;font-weight:600;border:1.5px solid var(--border);
+  cursor:pointer;background:var(--bg);color:var(--text);transition:all .15s}
+.toggle-chip.on{background:var(--primary-lt);border-color:var(--primary);color:var(--primary)}
+
+/* ─── FACILITY LIST ─── */
+#list{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px}
+.empty{text-align:center;padding:60px 20px;color:var(--text2)}
+.empty-icon{font-size:48px;margin-bottom:12px}
+.empty-text{font-size:15px}
+
+/* ─── CARD ─── */
+.card{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);
+  padding:14px;margin-bottom:10px;cursor:pointer;transition:transform .1s,box-shadow .1s;
+  border:1px solid var(--border)}
+.card:active{transform:scale(.99);box-shadow:none}
+.card-top{display:flex;align-items:flex-start;gap:8px;margin-bottom:8px}
+.badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;
+  font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px}
+.card-name{font-size:16px;font-weight:700;flex:1;line-height:1.3}
+.card-addr{font-size:12px;color:var(--text2);margin-bottom:8px}
+.card-chips{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
+.dis-chip{padding:2px 7px;border-radius:4px;font-size:11px;background:var(--bg2);color:var(--text2)}
+.card-meta{font-size:12px;color:var(--text2);display:flex;flex-wrap:wrap;gap:6px}
+.meta-tag{display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:4px;
+  background:var(--primary-lt);color:var(--primary);font-weight:500}
+
+/* ─── FAB ─── */
+.fab{position:fixed;right:20px;bottom:calc(20px + var(--sab));width:56px;height:56px;
+  border-radius:50%;background:var(--primary);color:#fff;font-size:28px;line-height:1;
+  box-shadow:0 4px 16px rgba(29,158,117,.4);z-index:40;transition:transform .15s,box-shadow .15s;
+  display:flex;align-items:center;justify-content:center;font-weight:300}
+.fab:active{transform:scale(.92);box-shadow:0 2px 8px rgba(29,158,117,.3)}
+
+/* ─── MODAL ─── */
+.modal{position:fixed;inset:0;z-index:100;display:none;flex-direction:column}
+.modal.show{display:flex}
+.modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.5)}
+.modal-sheet{position:absolute;left:0;right:0;bottom:0;max-height:94dvh;min-height:40dvh;
+  background:var(--bg);border-radius:var(--r2) var(--r2) 0 0;
+  display:flex;flex-direction:column;overflow:hidden;
+  padding-bottom:var(--sab)}
+.modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;
+  margin:12px auto 0}
+.modal-head{display:flex;align-items:center;padding:12px 16px;
+  border-bottom:1px solid var(--border);gap:8px;flex-shrink:0}
+.modal-title{font-size:17px;font-weight:700;flex:1}
+.modal-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0}
+.icon-btn{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:18px;transition:background .15s}
+.icon-btn:hover,.icon-btn:active{background:var(--bg2)}
+.icon-btn.danger:hover,.icon-btn.danger:active{background:#fee2e2;color:var(--danger)}
+
+/* ─── DETAIL ─── */
+.detail-hero{padding:20px 16px 14px;border-bottom:1px solid var(--border)}
+.detail-badge-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.detail-name{font-size:22px;font-weight:700;line-height:1.3;margin-bottom:6px}
+.detail-addr{font-size:14px;color:var(--text2)}
+.detail-tel a{color:var(--primary)}
+.section{padding:16px;border-bottom:1px solid var(--border)}
+.section:last-child{border-bottom:none}
+.section-title{font-size:13px;font-weight:700;color:var(--text2);text-transform:uppercase;
+  letter-spacing:.06em;margin-bottom:12px}
+.field-row{margin-bottom:10px}
+.field-label{font-size:12px;color:var(--text2);margin-bottom:3px}
+.field-val{font-size:14px;line-height:1.5}
+.chips-display{display:flex;flex-wrap:wrap;gap:6px}
+.dis-tag{padding:3px 10px;border-radius:6px;font-size:12px;background:var(--bg2);color:var(--text)}
+.highlight{background:var(--primary-lt);color:var(--primary);padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600}
+.cost-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cost-item{background:var(--bg2);border-radius:8px;padding:10px}
+.cost-item-label{font-size:11px;color:var(--text2);margin-bottom:2px}
+.cost-item-val{font-size:16px;font-weight:700}
+.cost-total{grid-column:1/-1;background:var(--primary-lt);border-radius:8px;padding:10px}
+.cost-total .cost-item-val{color:var(--primary)}
+
+/* ─── REVIEWS ─── */
+.review-item{padding:14px 16px;border-bottom:1px solid var(--border)}
+.review-item:last-child{border-bottom:none}
+.review-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.review-name{font-size:13px;font-weight:700;flex:1}
+.review-date{font-size:11px;color:var(--text2)}
+.stars-display{display:flex;gap:2px;margin-bottom:4px}
+.star{font-size:16px;color:#d1d5db}
+.star.on{color:#f59e0b}
+.review-comment{font-size:13px;color:var(--text);line-height:1.5}
+.review-del{color:var(--text2);font-size:12px;padding:4px 8px;border-radius:4px;transition:all .15s}
+.review-del:hover,.review-del:active{background:#fee2e2;color:var(--danger)}
+.add-review-form{padding:16px;border-top:1px solid var(--border)}
+.add-review-form .section-title{margin-bottom:14px}
+.stars-input{display:flex;gap:4px;margin-bottom:12px}
+.star-btn{font-size:28px;color:#d1d5db;cursor:pointer;transition:color .15s}
+.star-btn.on{color:#f59e0b}
+.no-reviews{padding:20px 16px;color:var(--text2);font-size:14px;text-align:center}
+
+/* ─── FORM ─── */
+.form-wrap{padding:16px;padding-bottom:calc(16px + var(--sab))}
+.form-group{margin-bottom:20px}
+.form-label{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
+.form-label .req{color:var(--danger);margin-left:3px}
+.form-input,.form-select,.form-textarea{width:100%;padding:10px 12px;
+  border:1.5px solid var(--border);border-radius:8px;font-size:16px;
+  background:var(--input);color:var(--text);transition:border-color .15s;
+  -webkit-appearance:none;appearance:none}
+.form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--primary)}
+.form-textarea{min-height:80px;resize:vertical;line-height:1.5}
+.form-select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+.form-hint{font-size:12px;color:var(--text2);margin-top:4px}
+.checkbox-group{display:flex;flex-wrap:wrap;gap:8px}
+.check-chip{position:relative}
+.check-chip input{position:absolute;opacity:0;width:0;height:0}
+.check-chip label{display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;
+  font-size:13px;border:1.5px solid var(--border);cursor:pointer;transition:all .15s;
+  background:var(--input);color:var(--text);user-select:none}
+.check-chip input:checked+label{background:var(--primary);border-color:var(--primary);color:#fff}
+.radio-group{display:flex;flex-wrap:wrap;gap:8px}
+.radio-chip{position:relative}
+.radio-chip input{position:absolute;opacity:0;width:0;height:0}
+.radio-chip label{display:inline-flex;align-items:center;padding:6px 16px;border-radius:999px;
+  font-size:13px;border:1.5px solid var(--border);cursor:pointer;transition:all .15s;
+  background:var(--input);color:var(--text);user-select:none}
+.radio-chip input:checked+label{background:var(--primary);border-color:var(--primary);color:#fff}
+.voice-row{display:flex;gap:8px;align-items:flex-start}
+.voice-row .form-textarea{flex:1}
+.voice-btn{flex-shrink:0;width:40px;height:40px;border-radius:8px;border:1.5px solid var(--border);
+  background:var(--input);font-size:18px;display:flex;align-items:center;justify-content:center;
+  transition:all .15s;margin-top:0}
+.voice-btn.recording{background:var(--danger);border-color:var(--danger);color:#fff;
+  animation:pulse .6s ease-in-out infinite alternate}
+@keyframes pulse{to{opacity:.6}}
+.cost-inputs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.cost-total-disp{padding:10px 12px;background:var(--primary-lt);border-radius:8px;
+  font-size:14px;font-weight:700;color:var(--primary)}
+.section-divider{margin:0 16px;padding-top:16px;border-top:1px solid var(--border);
+  font-size:13px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:16px}
+.form-actions{display:flex;gap:10px;padding:12px 16px;border-top:1px solid var(--border);
+  background:var(--card);flex-shrink:0}
+.btn-primary{flex:1;padding:14px;background:var(--primary);color:#fff;border-radius:10px;
+  font-size:15px;font-weight:700;transition:background .15s}
+.btn-primary:hover,.btn-primary:active{background:var(--primary-dk)}
+.btn-secondary{padding:14px 20px;background:var(--bg2);color:var(--text);border-radius:10px;
+  font-size:15px;font-weight:600;transition:background .15s}
+.btn-secondary:hover,.btn-secondary:active{background:var(--border)}
+.btn-danger-text{padding:14px;color:var(--danger);font-size:14px;font-weight:600}
+
+/* ─── TOAST ─── */
+#toast{position:fixed;bottom:calc(80px + var(--sab));left:50%;transform:translateX(-50%) translateY(20px);
+  background:#1f2937;color:#fff;padding:10px 20px;border-radius:24px;font-size:14px;
+  white-space:nowrap;z-index:999;opacity:0;transition:all .25s;pointer-events:none;max-width:90vw}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.success{background:#065f46}
+#toast.error{background:#991b1b}
+
+/* ─── CONFIRM DIALOG ─── */
+#confirm-dialog{position:fixed;inset:0;z-index:200;display:none;
+  align-items:flex-end;justify-content:center;background:rgba(0,0,0,.5)}
+#confirm-dialog.show{display:flex}
+.confirm-card{background:var(--card);border-radius:var(--r2) var(--r2) 0 0;
+  padding:24px 20px;width:100%;max-width:480px;padding-bottom:calc(20px + var(--sab))}
+.confirm-msg{font-size:16px;line-height:1.6;margin-bottom:20px;text-align:center}
+.confirm-btns{display:flex;gap:10px}
+.confirm-btns .btn-danger{flex:1;padding:14px;background:var(--danger);color:#fff;
+  border-radius:10px;font-size:15px;font-weight:700}
+.confirm-btns .btn-cancel{flex:1;padding:14px;background:var(--bg2);color:var(--text);
+  border-radius:10px;font-size:15px;font-weight:600}
+
+/* ─── INLINE LOADER ─── */
+.inline-loader{display:flex;justify-content:center;padding:40px}
+.mini-spin{width:24px;height:24px;border:2px solid var(--border);border-top-color:var(--primary);
+  border-radius:50%;animation:spin .7s linear infinite}
+</style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="s-load">
+  <div class="spin"></div>
+  <p style="font-size:14px;color:var(--text2)">読み込み中…</p>
+</div>
+
+<!-- Login -->
+<div id="s-login">
+  <div class="login-card">
+    <div class="login-logo">🏢</div>
+    <div class="login-title">事業所図鑑</div>
+    <div class="login-sub">エンジョイント株式会社<br>障害福祉サービス事業所情報管理</div>
+    <button class="btn-ms" onclick="login()">
+      <svg width="20" height="20" viewBox="0 0 21 21" fill="none">
+        <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+        <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+        <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+        <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+      </svg>
+      Microsoftアカウントでサインイン
+    </button>
+  </div>
+</div>
+
+<!-- Main App -->
+<div id="s-main">
+  <header>
+    <div class="hdr-title">事業所図鑑</div>
+    <span class="hdr-user" id="hdr-user"></span>
+    <button class="hdr-btn" onclick="logout()" title="ログアウト">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+  </header>
+
+  <nav class="tabs" id="tab-bar"></nav>
+
+  <div class="search-row">
+    <div class="search-wrap">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35" stroke-linecap="round"/>
+      </svg>
+      <input class="search-input" id="search-input" type="search" placeholder="事業所名・住所・コメントで検索" oninput="handleSearch(this.value)">
+    </div>
+    <button class="btn-filter" id="filter-btn" onclick="toggleFilter()">絞込</button>
+  </div>
+
+  <div id="filter-panel"></div>
+
+  <main id="list"></main>
+
+  <button class="fab" onclick="openForm(null)">＋</button>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal" id="m-detail">
+  <div class="modal-backdrop" onclick="closeModal('m-detail')"></div>
+  <div class="modal-sheet" id="m-detail-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-head">
+      <div class="modal-title" id="detail-title"></div>
+      <button class="icon-btn" onclick="openFormEdit()" title="編集">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button class="icon-btn danger" onclick="confirmDelete()" title="削除">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button class="icon-btn" onclick="closeModal('m-detail')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M18 6 6 18M6 6l12 12" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body" id="detail-body"></div>
+  </div>
+</div>
+
+<!-- Form Modal -->
+<div class="modal" id="m-form">
+  <div class="modal-backdrop" onclick="closeModal('m-form')"></div>
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-head">
+      <div class="modal-title" id="form-title">事業所を追加</div>
+      <button class="icon-btn" onclick="closeModal('m-form')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M18 6 6 18M6 6l12 12" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="facility-form" onsubmit="handleFormSubmit(event)">
+        <div class="form-wrap" id="form-fields"></div>
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" onclick="closeModal('m-form')">キャンセル</button>
+          <button type="submit" class="btn-primary" id="form-save-btn">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Dialog -->
+<div id="confirm-dialog">
+  <div class="confirm-card">
+    <div class="confirm-msg" id="confirm-msg"></div>
+    <div class="confirm-btns">
+      <button class="btn-cancel" onclick="closeConfirm(false)">キャンセル</button>
+      <button class="btn-danger" id="confirm-ok">削除する</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+// ════════════════════════════════════════════════
+// CONFIG
+// ════════════════════════════════════════════════
+const CLIENT_ID = '405cc58b-abd1-44da-a6b8-6d26d044164e';
+const TENANT_ID = 'f0796f06-778d-4183-b5d9-4cce701de452';
+const SCOPES    = ['User.Read','Files.ReadWrite.All'];
+const GRAPH     = 'https://graph.microsoft.com/v1.0';
+const EXCEL_FOLDER = 'enjoint-directory';
+const EXCEL_FILE   = '事業所データ.xlsx';
+const SHEET1 = '事業所データ';
+const SHEET2 = 'レビューデータ';
+
+const F_HEADERS = [
+  'id','type','name','address','tel','disabilities','送迎','送迎エリア',
+  'fitFor','comment','updatedBy','updatedAt','ageGroups','supportStyle','withHd',
+  'workTypes','supportStyleB','avgWage','workTypesA','avgSalary','outsideWork',
+  'employmentCount','avgWageB','ghType','ghGender','operatorName','capacity',
+  'ghRent','ghUtility','ghFood','ghDailyGoods','ghOther','ghEquipment','ghEquipmentNote','ghSupport'
+];
+const R_HEADERS = ['reviewId','facilityId','reviewerName','rating','comment','reviewDate'];
+const ARRAY_FIELDS = new Set([
+  'disabilities','ageGroups','supportStyle','workTypes','supportStyleB',
+  'workTypesA','ghEquipment','ghSupport'
+]);
+const NO_TRANSIT = new Set(['vn','vi','ms','ps','vd','ot']);
+
+const TYPES = {
+  hd:{ label:'放課後等デイ',    short:'放デイ',  color:'#7C3AED', bg:'#f3f0ff' },
+  cd:{ label:'児童発達支援',    short:'児発',    color:'#DB2777', bg:'#fdf2f8' },
+  b: { label:'就労継続B型',     short:'B型',     color:'#0891B2', bg:'#ecfeff' },
+  a: { label:'就労継続A型',     short:'A型',     color:'#D97706', bg:'#fffbeb' },
+  tr:{ label:'就労移行支援',    short:'移行',    color:'#059669', bg:'#ecfdf5' },
+  gh:{ label:'グループホーム',  short:'GH',      color:'#7C3AED', bg:'#faf5ff' },
+  vn:{ label:'訪問看護',        short:'訪看',    color:'#DC2626', bg:'#fef2f2' },
+  vi:{ label:'訪問介護',        short:'訪介',    color:'#92400E', bg:'#fffbeb' },
+  ms:{ label:'移動支援',        short:'移動',    color:'#1D4ED8', bg:'#eff6ff' },
+  ps:{ label:'精神科・クリニック',short:'クリ', color:'#475569', bg:'#f8fafc' },
+  vd:{ label:'訪問診療',        short:'訪診',    color:'#B91C1C', bg:'#fef2f2' },
+  ot:{ label:'その他',          short:'他',      color:'#6B7280', bg:'#f9fafb' },
+};
+const ALL_TABS = [
+  {id:'all', label:'すべて'},
+  {id:'hd',  label:'放課後等デイ'},
+  {id:'cd',  label:'児童発達支援'},
+  {id:'b',   label:'就労B型'},
+  {id:'a',   label:'就労A型'},
+  {id:'tr',  label:'就労移行'},
+  {id:'gh',  label:'グループホーム'},
+  {id:'vn',  label:'訪問看護'},
+  {id:'vi',  label:'訪問介護'},
+  {id:'ms',  label:'移動支援'},
+  {id:'ps',  label:'精神科・クリニック'},
+  {id:'vd',  label:'訪問診療'},
+  {id:'ot',  label:'その他'},
+];
+
+const DISABILITIES = ['知的障害','精神障害','発達障害','身体障害','強度行動障害','重複障害'];
+const AGE_GROUPS   = ['未就学児','小学生(低学年)','小学生(高学年)','中学生','高校生'];
+const SUPPORT_STYLE_HD = ['療育重視','預かり・居場所重視','運動特化','学習支援','生活スキル訓練','感覚統合','重度対応可'];
+const WORK_TYPES_B  = ['軽作業','農業・植物','カフェ・飲食','パソコン・データ','清掃','手工芸・制作','販売'];
+const SUPPORT_STYLE_B= ['就労訓練重視','居場所・生活支援重視','SST・社会スキル訓練','個別支援重視','集団活動重視'];
+const WORK_TYPES_A  = ['軽作業','農業・植物','カフェ・飲食','パソコン・データ','清掃','手工芸・制作','販売','接客・サービス'];
+const GH_TYPES   = ['介護包括型','日中支援型','外部サービス利用型','サテライト型'];
+const GH_GENDERS = ['男性のみ','女性のみ','男女いずれも可'];
+const GH_EQUIP   = ['冷蔵庫','洗濯機','電子レンジ','テレビ','エアコン','ベッド','WiFi','駐車場'];
+const GH_SUPPORT = ['食事提供(朝)','食事提供(昼)','食事提供(晩)','夜間支援員の配置','受診同行','行政手続き等の同行'];
+const TRANSIT_OPTS = ['あり','なし','要相談'];
+
+// ════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════
+let S = {
+  user: null,
+  fileId: null,
+  facilities: [],
+  reviews: [],
+  tab: 'all',
+  search: '',
+  filters: {},
+  showFilters: false,
+  detailId: null,
+  editFacility: null,
+  toastTimer: null,
+};
+
+// ════════════════════════════════════════════════
+// MSAL
+// ════════════════════════════════════════════════
+const path = window.location.pathname;
+const dir  = path.endsWith('/') ? path : path.substring(0,path.lastIndexOf('/')+1);
+const REDIRECT_URI = `${window.location.protocol}//${window.location.host}${dir}`;
+
+const msalCfg = {
+  auth:{ clientId:CLIENT_ID, authority:`https://login.microsoftonline.com/${TENANT_ID}`, redirectUri:REDIRECT_URI },
+  cache:{ cacheLocation:'sessionStorage', storeAuthStateInCookie:true },
+  system:{ allowNativeBroker:false }
+};
+let msalApp = null;
+
+async function initMsal(){
+  const lib = window.msal || window.msalBrowser;
+  if(!lib) throw new Error('MSAL library not loaded');
+  msalApp = new lib.PublicClientApplication(msalCfg);
+  await msalApp.initialize();
+  const result = await msalApp.handleRedirectPromise().catch(()=>null);
+  if(result) msalApp.setActiveAccount(result.account);
+  const accs = msalApp.getAllAccounts();
+  if(accs.length && !msalApp.getActiveAccount()) msalApp.setActiveAccount(accs[0]);
+  return msalApp.getActiveAccount();
+}
+
+async function login(){
+  await msalApp.loginRedirect({ scopes:SCOPES, prompt:'select_account' });
+}
+
+async function logout(){
+  S.user=null; S.fileId=null; S.facilities=[]; S.reviews=[];
+  await msalApp.logoutRedirect({ postLogoutRedirectUri: REDIRECT_URI });
+}
+
+async function getToken(){
+  const account = msalApp.getActiveAccount();
+  if(!account) throw new Error('Not authenticated');
+  try {
+    const r = await msalApp.acquireTokenSilent({ scopes:SCOPES, account });
+    return r.accessToken;
+  } catch(e){
+    const lib = window.msal || window.msalBrowser;
+    if(e instanceof lib.InteractionRequiredAuthError){
+      await msalApp.acquireTokenRedirect({ scopes:SCOPES, account });
+      return null;
+    }
+    throw e;
+  }
+}
+
+// ════════════════════════════════════════════════
+// GRAPH API
+// ════════════════════════════════════════════════
+async function api(url, opts={}){
+  const token = await getToken();
+  if(!token) return null;
+  const headers = { Authorization:`Bearer ${token}`, ...opts.headers };
+  if(opts.body && !headers['Content-Type']) headers['Content-Type']='application/json';
+  const res = await fetch(url, { ...opts, headers });
+  if(!res.ok){
+    let msg = `HTTP ${res.status}`;
+    try{ const j=await res.json(); msg = j.error?.message||msg; }catch{}
+    const err = new Error(msg); err.status=res.status; throw err;
+  }
+  if(res.status===204) return null;
+  return res.json();
+}
+
+// ════════════════════════════════════════════════
+// EXCEL FILE MANAGEMENT
+// ════════════════════════════════════════════════
+async function getFileId(){
+  if(S.fileId) return S.fileId;
+  const enc = encodeURIComponent;
+  const url = `${GRAPH}/me/drive/root:/${EXCEL_FOLDER}/${enc(EXCEL_FILE)}`;
+  try {
+    const f = await api(url);
+    S.fileId = f.id;
+    return S.fileId;
+  } catch(e){
+    if(e.status===404){ await createExcelFile(); return getFileId(); }
+    throw e;
+  }
+}
+
+async function createExcelFile(){
+  showToast('Excelファイルを作成中…');
+  const zip = new JSZip();
+
+  const fHdrs = F_HEADERS.join('\t');
+  const rHdrs = R_HEADERS.join('\t');
+  // Build shared strings
+  const allStrings = [...F_HEADERS, ...R_HEADERS, SHEET1, SHEET2];
+  const ssXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${allStrings.length}" uniqueCount="${allStrings.length}">
+${allStrings.map(s=>`<si><t xml:space="preserve">${escXml(s)}</t></si>`).join('')}
+</sst>`;
+
+  // Build header rows
+  function buildHeaderRow(headers, offset=0){
+    return `<row r="1">${headers.map((h,i)=>{
+      const col=colLetter(i+1); const idx=offset+i;
+      return `<c r="${col}1" t="s"><v>${idx}</v></c>`;
+    }).join('')}</row>`;
+  }
+  const ws1Xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<sheetData>${buildHeaderRow(F_HEADERS,0)}</sheetData></worksheet>`;
+  const ws2Xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<sheetData>${buildHeaderRow(R_HEADERS,F_HEADERS.length)}</sheetData></worksheet>`;
+
+  const wbXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="${escXml(SHEET1)}" sheetId="1" r:id="rId1"/>
+    <sheet name="${escXml(SHEET2)}" sheetId="2" r:id="rId2"/>
+  </sheets>
+</workbook>`;
+
+  const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>
+<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>
+<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>
+</styleSheet>`;
+
+  const ctXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>`;
+
+  const relsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`;
+
+  const wbRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>
+<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>
+<Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`;
+
+  zip.file('[Content_Types].xml', ctXml);
+  zip.file('_rels/.rels', relsXml);
+  zip.file('xl/workbook.xml', wbXml);
+  zip.file('xl/_rels/workbook.xml.rels', wbRelsXml);
+  zip.file('xl/worksheets/sheet1.xml', ws1Xml);
+  zip.file('xl/worksheets/sheet2.xml', ws2Xml);
+  zip.file('xl/sharedStrings.xml', ssXml);
+  zip.file('xl/styles.xml', stylesXml);
+
+  const buf = await zip.generateAsync({ type:'arraybuffer' });
+
+  // Ensure folder exists
+  try {
+    const token = await getToken();
+    await fetch(`${GRAPH}/me/drive/root:/${EXCEL_FOLDER}`, {
+      headers:{ Authorization:`Bearer ${token}` }
+    });
+  } catch{}
+
+  // Upload
+  const token = await getToken();
+  const enc = encodeURIComponent;
+  const uploadUrl = `${GRAPH}/me/drive/root:/${EXCEL_FOLDER}/${enc(EXCEL_FILE)}:/content`;
+  const res = await fetch(uploadUrl, {
+    method:'PUT',
+    headers:{ Authorization:`Bearer ${token}`, 'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+    body: buf
+  });
+  if(!res.ok){ const j=await res.json(); throw new Error(j.error?.message||`Upload failed ${res.status}`); }
+  const data = await res.json();
+  S.fileId = data.id;
+  showToast('Excelファイルを作成しました','success');
+}
+
+function escXml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;'); }
+
+async function readSheet(name){
+  const id = await getFileId();
+  const url = `${GRAPH}/me/drive/items/${id}/workbook/worksheets('${encodeURIComponent(name)}')/usedRange`;
+  try {
+    const data = await api(url);
+    if(!data?.values || data.values.length < 2) return [];
+    return data.values;
+  } catch(e){
+    if(e.status===400 || e.status===404) return [];
+    throw e;
+  }
+}
+
+async function writeSheet(name, rows){
+  const id = await getFileId();
+  const base = `${GRAPH}/me/drive/items/${id}/workbook/worksheets('${encodeURIComponent(name)}')`;
+  // Clear existing content
+  try { await api(`${base}/usedRange/clear`,{ method:'POST', body:JSON.stringify({applyTo:'contents'}) }); } catch{}
+  if(!rows.length) return;
+  const nCols = rows[0].length;
+  const addr  = `A1:${colLetter(nCols)}${rows.length}`;
+  await api(`${base}/range(address='${addr}')`,{
+    method:'PATCH',
+    body: JSON.stringify({ values: rows })
+  });
+}
+
+// ════════════════════════════════════════════════
+// DATA LAYER
+// ════════════════════════════════════════════════
+function parseRow(headers, row){
+  const o={};
+  headers.forEach((h,i)=>{
+    const v = row[i]!=null ? String(row[i]) : '';
+    o[h] = ARRAY_FIELDS.has(h) ? (v ? v.split(',').map(s=>s.trim()).filter(Boolean) : []) : v;
+  });
+  return o;
+}
+function serializeRow(headers, obj){
+  return headers.map(h=>{
+    const v = obj[h];
+    if(Array.isArray(v)) return v.join(',');
+    return v!=null ? String(v) : '';
+  });
+}
+
+async function loadData(){
+  setLoading(true);
+  try {
+    const [fRows, rRows] = await Promise.all([
+      readSheet(SHEET1), readSheet(SHEET2)
+    ]);
+    if(fRows.length >= 1) {
+      const hdrs = fRows[0].map(String);
+      S.facilities = fRows.slice(1).map(r=>parseRow(hdrs, r)).filter(f=>f.id);
+    } else { S.facilities=[]; }
+    if(rRows.length >= 1) {
+      const hdrs = rRows[0].map(String);
+      S.reviews = rRows.slice(1).map(r=>parseRow(hdrs, r)).filter(r=>r.reviewId);
+    } else { S.reviews=[]; }
+  } finally { setLoading(false); }
+}
+
+async function saveFacility(f){
+  setLoading(true);
+  try {
+    f.updatedBy = S.user?.name || S.user?.username || '';
+    f.updatedAt = nowStr();
+    if(!f.id) f.id = uid();
+    const idx = S.facilities.findIndex(x=>x.id===f.id);
+    if(idx>=0) S.facilities[idx]=f; else S.facilities.push(f);
+    await writeSheet(SHEET1, [F_HEADERS, ...S.facilities.map(x=>serializeRow(F_HEADERS,x))]);
+    showToast('保存しました','success');
+  } finally { setLoading(false); }
+}
+
+async function deleteFacility(id){
+  setLoading(true);
+  try {
+    S.facilities = S.facilities.filter(f=>f.id!==id);
+    S.reviews    = S.reviews.filter(r=>r.facilityId!==id);
+    await Promise.all([
+      writeSheet(SHEET1, [F_HEADERS, ...S.facilities.map(x=>serializeRow(F_HEADERS,x))]),
+      writeSheet(SHEET2, [R_HEADERS, ...S.reviews.map(x=>serializeRow(R_HEADERS,x))])
+    ]);
+    showToast('削除しました');
+  } finally { setLoading(false); }
+}
+
+async function saveReview(r){
+  r.reviewId   = uid();
+  r.reviewDate = nowStr().split('T')[0];
+  S.reviews.push(r);
+  await writeSheet(SHEET2, [R_HEADERS, ...S.reviews.map(x=>serializeRow(R_HEADERS,x))]);
+  showToast('レビューを投稿しました','success');
+}
+
+async function deleteReview(rid){
+  S.reviews = S.reviews.filter(r=>r.reviewId!==rid);
+  await writeSheet(SHEET2, [R_HEADERS, ...S.reviews.map(x=>serializeRow(R_HEADERS,x))]);
+  showToast('レビューを削除しました');
+}
+
+// ════════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════════
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function nowStr(){ return new Date().toISOString(); }
+function colLetter(n){ let s=''; while(n>0){ n--; s=String.fromCharCode(65+n%26)+s; n=Math.floor(n/26); } return s; }
+function numFmt(v){ const n=Number(v); return isNaN(n)||v==='' ? '—' : n.toLocaleString('ja-JP')+'円'; }
+function setLoading(v){
+  document.getElementById('s-load').style.display = v ? 'flex' : 'none';
+}
+let toastTimer=null;
+function showToast(msg, type=''){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.className='show'+(type?' '+type:'');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{ el.className=''; },2400);
+}
+function closeModal(id){
+  document.getElementById(id)?.classList.remove('show');
+  if(id==='m-detail') S.detailId=null;
+  if(id==='m-form') S.editFacility=null;
+}
+function openModal(id){ document.getElementById(id).classList.add('show'); }
+
+// ════════════════════════════════════════════════
+// FILTER LOGIC
+// ════════════════════════════════════════════════
+function getFiltered(){
+  const q = S.search.toLowerCase();
+  const f = S.filters;
+  return S.facilities.filter(fac=>{
+    if(S.tab!=='all' && fac.type!==S.tab) return false;
+    if(q && !`${fac.name}${fac.address}${fac.comment}${fac.fitFor}`.toLowerCase().includes(q)) return false;
+    if(f.disabilities?.length && !f.disabilities.some(d=>fac.disabilities?.includes(d))) return false;
+    if(f.transit && fac['送迎']!=='あり') return false;
+    if(f.ageGroups?.length && !f.ageGroups.some(a=>fac.ageGroups?.includes(a))) return false;
+    if(f.supportStyle?.length && !f.supportStyle.some(s=>fac.supportStyle?.includes(s))) return false;
+    if(f.withHd && fac.withHd!=='あり') return false;
+    if(f.minWage && Number(fac.avgWage)<20000) return false;
+    if(f.minSalary && Number(fac.avgSalary)<200000) return false;
+    if(f.outsideWork && fac.outsideWork!=='あり') return false;
+    if(f.hasEmployment && (!fac.employmentCount || Number(fac.employmentCount)<1)) return false;
+    if(f.nightSupport && !fac.ghSupport?.includes('夜間支援員の配置')) return false;
+    if(f.ghType && fac.ghType!==f.ghType) return false;
+    if(f.ghGender && fac.ghGender!==f.ghGender) return false;
+    return true;
+  });
+}
+
+// ════════════════════════════════════════════════
+// RENDER — LIST & CARDS
+// ════════════════════════════════════════════════
+function renderTabs(){
+  document.getElementById('tab-bar').innerHTML = ALL_TABS.map(t=>`
+    <button class="tab${S.tab===t.id?' active':''}" onclick="switchTab('${t.id}')">${t.label}</button>
+  `).join('');
+}
+
+function renderFilters(){
+  const fp = document.getElementById('filter-panel');
+  fp.className = S.showFilters ? 'show' : '';
+  if(!S.showFilters){ fp.innerHTML=''; return; }
+  const tab = S.tab;
+  const f = S.filters;
+  let html = '';
+
+  // Disabilities
+  html += `<div class="filter-section"><div class="filter-label">対応障害種別</div>
+    <div class="chip-row">${DISABILITIES.map(d=>`
+      <button class="chip${f.disabilities?.includes(d)?' on':''}" onclick="toggleFilterChip('disabilities','${d}')">${d}</button>
+    `).join('')}</div></div>`;
+
+  if(!NO_TRANSIT.has(tab) && tab!=='all'){
+    html += `<div class="filter-section"><div class="chip-row">
+      <button class="toggle-chip${f.transit?' on':''}" onclick="toggleFilterBool('transit')">🚐 送迎あり</button>
+    </div></div>`;
+  }
+  if(tab==='all'){
+    html += `<div class="filter-section"><div class="chip-row">
+      <button class="toggle-chip${f.transit?' on':''}" onclick="toggleFilterBool('transit')">🚐 送迎あり</button>
+    </div></div>`;
+  }
+
+  if(tab==='hd'||tab==='cd'){
+    html += `<div class="filter-section"><div class="filter-label">対応学齢</div>
+      <div class="chip-row">${AGE_GROUPS.map(a=>`
+        <button class="chip${f.ageGroups?.includes(a)?' on':''}" onclick="toggleFilterChip('ageGroups','${a}')">${a}</button>
+      `).join('')}</div></div>`;
+  }
+  if(tab==='cd'){
+    html += `<div class="filter-section"><div class="chip-row">
+      <button class="toggle-chip${f.withHd?' on':''}" onclick="toggleFilterBool('withHd')">放デイ併設あり</button>
+    </div></div>`;
+  }
+  if(tab==='b'){
+    html += `<div class="filter-section"><div class="chip-row">
+      <button class="toggle-chip${f.minWage?' on':''}" onclick="toggleFilterBool('minWage')">工賃2万円以上</button>
+    </div></div>`;
+  }
+  if(tab==='a'){
+    html += `<div class="filter-section"><div class="chip-row">
+      <button class="toggle-chip${f.minSalary?' on':''}" onclick="toggleFilterBool('minSalary')">月給20万円以上</button>
+      <button class="toggle-chip${f.outsideWork?' on':''}" onclick="toggleFilterBool('outsideWork')">施設外就労あり</button>
+    </div></div>`;
+  }
+  if(tab==='tr'){
+    html += `<div class="filter-section"><div class="chip-row">
+      <button class="toggle-chip${f.hasEmployment?' on':''}" onclick="toggleFilterBool('hasEmployment')">就労実績あり</button>
+      <button class="toggle-chip${f.outsideWork?' on':''}" onclick="toggleFilterBool('outsideWork')">施設外就労あり</button>
+    </div></div>`;
+  }
+  if(tab==='gh'){
+    html += `<div class="filter-section"><div class="filter-label">種別</div>
+      <div class="chip-row">${GH_TYPES.map(t=>`
+        <button class="chip${f.ghType===t?' on':''}" onclick="setFilterVal('ghType','${t}')">${t}</button>
+      `).join('')}</div></div>
+      <div class="filter-section"><div class="filter-label">入居対象</div>
+      <div class="chip-row">${GH_GENDERS.map(g=>`
+        <button class="chip${f.ghGender===g?' on':''}" onclick="setFilterVal('ghGender','${g}')">${g}</button>
+      `).join('')}</div></div>
+      <div class="filter-section"><div class="chip-row">
+        <button class="toggle-chip${f.nightSupport?' on':''}" onclick="toggleFilterBool('nightSupport')">夜間支援員あり</button>
+      </div></div>`;
+  }
+  fp.innerHTML = html;
+}
+
+function switchTab(id){
+  S.tab=id; S.filters={}; S.showFilters=false;
+  document.getElementById('filter-btn').classList.remove('active');
+  renderTabs(); renderFilters(); renderList();
+}
+function toggleFilter(){
+  S.showFilters=!S.showFilters;
+  document.getElementById('filter-btn').classList.toggle('active',S.showFilters);
+  renderFilters();
+}
+function toggleFilterChip(key,val){
+  if(!S.filters[key]) S.filters[key]=[];
+  const arr=S.filters[key];
+  const i=arr.indexOf(val);
+  if(i>=0) arr.splice(i,1); else arr.push(val);
+  renderFilters(); renderList();
+}
+function toggleFilterBool(key){ S.filters[key]=!S.filters[key]; renderFilters(); renderList(); }
+function setFilterVal(key,val){ S.filters[key]= S.filters[key]===val ? null : val; renderFilters(); renderList(); }
+function handleSearch(v){ S.search=v; renderList(); }
+
+function renderList(){
+  const el = document.getElementById('list');
+  const items = getFiltered();
+  if(!items.length){
+    el.innerHTML=`<div class="empty">
+      <div class="empty-icon">🔍</div>
+      <div class="empty-text">${S.facilities.length===0?'まだ事業所が登録されていません。<br>右下の＋ボタンから追加してください。':'条件に一致する事業所がありません。'}</div>
+    </div>`;
+    return;
+  }
+  el.innerHTML = items.map(f=>renderCard(f)).join('');
+}
+
+function renderCard(f){
+  const t = TYPES[f.type]||{label:f.type,color:'#6B7280',bg:'#f9fafb'};
+  const dis = (f.disabilities||[]).map(d=>`<span class="dis-chip">${d}</span>`).join('');
+  let meta=[];
+  if(!NO_TRANSIT.has(f.type) && f['送迎']==='あり') meta.push('<span class="meta-tag">🚐 送迎あり</span>');
+  if(!NO_TRANSIT.has(f.type) && f['送迎']==='要相談') meta.push('<span class="meta-tag">🚐 要相談</span>');
+  if(f.type==='b' && f.avgWage) meta.push(`<span class="meta-tag">💴 工賃 ${numFmt(f.avgWage)}</span>`);
+  if(f.type==='a' && f.avgSalary) meta.push(`<span class="meta-tag">💴 給与 ${numFmt(f.avgSalary)}</span>`);
+  if(f.type==='tr' && f.employmentCount) meta.push(`<span class="meta-tag">✅ 就労実績 ${f.employmentCount}件</span>`);
+  if(f.type==='gh' && f.ghSupport?.includes('夜間支援員の配置')) meta.push('<span class="meta-tag">🌙 夜間支援</span>');
+  if(f.type==='cd' && f.withHd==='あり') meta.push('<span class="meta-tag">放デイ併設</span>');
+  const ghTotal = f.type==='gh' ? ghCostTotal(f) : 0;
+  if(f.type==='gh' && ghTotal) meta.push(`<span class="meta-tag">🏠 月${numFmt(ghTotal)}</span>`);
+  return `<div class="card" onclick="openDetail('${f.id}')">
+    <div class="card-top">
+      <span class="badge" style="background:${t.bg};color:${t.color}">${t.short||t.label}</span>
+      <div class="card-name">${esc(f.name||'名称未設定')}</div>
+    </div>
+    ${f.address?`<div class="card-addr">📍 ${esc(f.address)}</div>`:''}
+    ${dis?`<div class="card-chips">${dis}</div>`:''}
+    ${meta.length?`<div class="card-meta">${meta.join('')}</div>`:''}
+  </div>`;
+}
+
+function ghCostTotal(f){
+  return ['ghRent','ghUtility','ghFood','ghDailyGoods','ghOther']
+    .reduce((s,k)=>{const n=Number(f[k]); return s+(isNaN(n)?0:n);},0);
+}
+
+// ════════════════════════════════════════════════
+// DETAIL MODAL
+// ════════════════════════════════════════════════
+function openDetail(id){
+  S.detailId = id;
+  const f = S.facilities.find(x=>x.id===id);
+  if(!f) return;
+  const t = TYPES[f.type]||{label:f.type,color:'#6B7280',bg:'#f9fafb'};
+  document.getElementById('detail-title').textContent = f.type==='gh' ? (f.name||'住居名未設定') : (f.name||'名称未設定');
+  const body = document.getElementById('detail-body');
+  const dis = (f.disabilities||[]).map(d=>`<span class="dis-tag">${esc(d)}</span>`).join('');
+  let html = `<div class="detail-hero">
+    <div class="detail-badge-row">
+      <span class="badge" style="background:${t.bg};color:${t.color};font-size:13px;padding:4px 12px">${t.label}</span>
+    </div>
+    <div class="detail-name">${esc(f.name||'名称未設定')}</div>
+    ${f.address?`<div class="detail-addr">📍 ${esc(f.address)}</div>`:''}
+    ${f.tel?`<div class="detail-addr detail-tel">📞 <a href="tel:${esc(f.tel)}">${esc(f.tel)}</a></div>`:''}
+    ${dis?`<div class="chips-display" style="margin-top:10px">${dis}</div>`:''}
+  </div>`;
+
+  // Common fields
+  let commonHtml='';
+  if(!NO_TRANSIT.has(f.type)){
+    if(f['送迎']) commonHtml+=fieldRow('送迎',`<span class="highlight">${esc(f['送迎'])}</span>`);
+    if(f['送迎エリア']) commonHtml+=fieldRow('送迎エリア',esc(f['送迎エリア']));
+  }
+  if(f.fitFor) commonHtml+=fieldRow('向いている方・家庭',esc(f.fitFor));
+  if(f.comment) commonHtml+=fieldRow('担当者コメント',esc(f.comment));
+  if(commonHtml) html+=`<div class="section"><div class="section-title">基本情報</div>${commonHtml}</div>`;
+
+  // Type specific
+  html += renderTypeDetail(f);
+
+  // Update info
+  html+=`<div class="section">
+    <div class="section-title">更新情報</div>
+    ${f.updatedBy?fieldRow('記入者',esc(f.updatedBy)):''}
+    ${f.updatedAt?fieldRow('記入日',esc(f.updatedAt.split('T')[0])):''}
+  </div>`;
+
+  // Reviews
+  html += renderReviewsSection(id);
+
+  body.innerHTML = html;
+  openModal('m-detail');
+}
+
+function fieldRow(label, val){
+  return `<div class="field-row"><div class="field-label">${label}</div><div class="field-val">${val}</div></div>`;
+}
+function chipsDisplay(arr){ return `<div class="chips-display">${(arr||[]).map(v=>`<span class="highlight">${esc(v)}</span>`).join('')}</div>`; }
+
+function renderTypeDetail(f){
+  switch(f.type){
+    case 'hd': case 'cd': {
+      let h='';
+      if(f.ageGroups?.length) h+=fieldRow('対応学齢',chipsDisplay(f.ageGroups));
+      if(f.supportStyle?.length) h+=fieldRow('支援スタイル',chipsDisplay(f.supportStyle));
+      if(f.type==='cd' && f.withHd) h+=fieldRow('放デイ併設',`<span class="highlight">${esc(f.withHd)}</span>`);
+      return h?`<div class="section"><div class="section-title">サービス詳細</div>${h}</div>`:'';
+    }
+    case 'b': {
+      let h='';
+      if(f.workTypes?.length) h+=fieldRow('作業内容',chipsDisplay(f.workTypes));
+      if(f.supportStyleB?.length) h+=fieldRow('支援スタイル',chipsDisplay(f.supportStyleB));
+      if(f.avgWage) h+=fieldRow('平均工賃（月額）',`<span class="highlight">${numFmt(f.avgWage)}</span>`);
+      return h?`<div class="section"><div class="section-title">サービス詳細</div>${h}</div>`:'';
+    }
+    case 'a': {
+      let h='';
+      if(f.workTypesA?.length) h+=fieldRow('仕事内容',chipsDisplay(f.workTypesA));
+      if(f.avgSalary) h+=fieldRow('平均月額給与',`<span class="highlight">${numFmt(f.avgSalary)}</span>`);
+      if(f.outsideWork) h+=fieldRow('施設外就労',`<span class="highlight">${esc(f.outsideWork)}</span>`);
+      return h?`<div class="section"><div class="section-title">サービス詳細</div>${h}</div>`:'';
+    }
+    case 'tr': {
+      let h='';
+      if(f.employmentCount) h+=fieldRow('一般就労実績（年間）',`<span class="highlight">${esc(f.employmentCount)}件</span>`);
+      if(f.outsideWork) h+=fieldRow('施設外就労',`<span class="highlight">${esc(f.outsideWork)}</span>`);
+      if(f.avgWageB) h+=fieldRow('月額工賃',`<span class="highlight">${numFmt(f.avgWageB)}</span>`);
+      return h?`<div class="section"><div class="section-title">サービス詳細</div>${h}</div>`:'';
+    }
+    case 'gh': {
+      let h='';
+      if(f.operatorName) h+=fieldRow('運営法人名',esc(f.operatorName));
+      if(f.capacity) h+=fieldRow('定員',`${esc(f.capacity)}名`);
+      if(f.ghType) h+=fieldRow('種別',`<span class="highlight">${esc(f.ghType)}</span>`);
+      if(f.ghGender) h+=fieldRow('入居対象',`<span class="highlight">${esc(f.ghGender)}</span>`);
+      const tot = ghCostTotal(f);
+      if(tot){
+        h+=`<div class="field-row"><div class="field-label">月額費用内訳</div>
+          <div class="cost-grid">
+            ${f.ghRent?`<div class="cost-item"><div class="cost-item-label">家賃</div><div class="cost-item-val">${numFmt(f.ghRent)}</div></div>`:''}
+            ${f.ghUtility?`<div class="cost-item"><div class="cost-item-label">光熱費</div><div class="cost-item-val">${numFmt(f.ghUtility)}</div></div>`:''}
+            ${f.ghFood?`<div class="cost-item"><div class="cost-item-label">食費</div><div class="cost-item-val">${numFmt(f.ghFood)}</div></div>`:''}
+            ${f.ghDailyGoods?`<div class="cost-item"><div class="cost-item-label">日用品費</div><div class="cost-item-val">${numFmt(f.ghDailyGoods)}</div></div>`:''}
+            ${f.ghOther?`<div class="cost-item"><div class="cost-item-label">その他</div><div class="cost-item-val">${numFmt(f.ghOther)}</div></div>`:''}
+            <div class="cost-total"><div class="cost-item-label">合計</div><div class="cost-item-val">${numFmt(tot)}</div></div>
+          </div></div>`;
+      }
+      if(f.ghEquipment?.length) h+=fieldRow('設備',chipsDisplay(f.ghEquipment));
+      if(f.ghEquipmentNote) h+=fieldRow('設備補足',esc(f.ghEquipmentNote));
+      if(f.ghSupport?.length) h+=fieldRow('援助内容',chipsDisplay(f.ghSupport));
+      return h?`<div class="section"><div class="section-title">住居情報</div>${h}</div>`:'';
+    }
+    default: return '';
+  }
+}
+
+function renderReviewsSection(facilityId){
+  const revs = S.reviews.filter(r=>r.facilityId===facilityId);
+  const starsHtml = (n)=> Array.from({length:5},(_,i)=>`<span class="star${i<Number(n)?' on':''}">★</span>`).join('');
+  let html = `<div class="section" style="padding-bottom:0">
+    <div class="section-title" style="padding:16px 0 0 0;margin:0">レビュー・口コミ</div>`;
+  if(!revs.length){
+    html+=`<div class="no-reviews">まだレビューがありません</div>`;
+  } else {
+    html+=revs.map(r=>`
+      <div class="review-item">
+        <div class="review-head">
+          <span class="review-name">${esc(r.reviewerName||'匿名')}</span>
+          <span class="review-date">${esc(r.reviewDate||'')}</span>
+          <button class="review-del" onclick="handleDeleteReview('${r.reviewId}')">削除</button>
+        </div>
+        <div class="stars-display">${starsHtml(r.rating)}</div>
+        ${r.comment?`<div class="review-comment">${esc(r.comment)}</div>`:''}
+      </div>`).join('');
+  }
+  html+=`</div>
+  <div class="add-review-form">
+    <div class="section-title">レビューを投稿</div>
+    <div id="rv-stars" class="stars-input" data-rating="0">
+      ${Array.from({length:5},(_,i)=>`<span class="star-btn" data-n="${i+1}" onclick="setRevStar(${i+1})">★</span>`).join('')}
+    </div>
+    <div class="form-group" style="margin-bottom:10px">
+      <input class="form-input" id="rv-name" placeholder="お名前（任意）" maxlength="30">
+    </div>
+    <div class="form-group" style="margin-bottom:10px">
+      <textarea class="form-textarea" id="rv-comment" placeholder="コメント（任意）" rows="3" style="min-height:64px"></textarea>
+    </div>
+    <button class="btn-primary" style="width:100%" onclick="handleAddReview('${facilityId}')">投稿する</button>
+  </div>`;
+  return html;
+}
+
+let _revRating = 0;
+function setRevStar(n){
+  _revRating = n;
+  const cont = document.getElementById('rv-stars');
+  if(!cont) return;
+  cont.querySelectorAll('.star-btn').forEach((s,i)=>s.classList.toggle('on',i<n));
+}
+
+async function handleAddReview(facilityId){
+  const name = document.getElementById('rv-name')?.value.trim()||'';
+  const comment = document.getElementById('rv-comment')?.value.trim()||'';
+  if(!_revRating){ showToast('おすすめ度を選択してください','error'); return; }
+  try {
+    await saveReview({ facilityId, reviewerName:name, rating:String(_revRating), comment });
+    _revRating=0;
+    openDetail(facilityId); // re-render
+  } catch(e){ showToast('エラー: '+e.message,'error'); }
+}
+async function handleDeleteReview(rid){
+  try { await deleteReview(rid); if(S.detailId) openDetail(S.detailId); }
+  catch(e){ showToast('エラー: '+e.message,'error'); }
+}
+
+// ════════════════════════════════════════════════
+// FORM MODAL
+// ════════════════════════════════════════════════
+function openForm(f){
+  S.editFacility = f ? {...f, disabilities:f.disabilities?[...f.disabilities]:[], ageGroups:f.ageGroups?[...f.ageGroups]:[], supportStyle:f.supportStyle?[...f.supportStyle]:[], workTypes:f.workTypes?[...f.workTypes]:[], supportStyleB:f.supportStyleB?[...f.supportStyleB]:[], workTypesA:f.workTypesA?[...f.workTypesA]:[], ghEquipment:f.ghEquipment?[...f.ghEquipment]:[], ghSupport:f.ghSupport?[...f.ghSupport]:[] } : { type: S.tab==='all'?'hd':S.tab, disabilities:[], ageGroups:[], supportStyle:[], workTypes:[], supportStyleB:[], workTypesA:[], ghEquipment:[], ghSupport:[] };
+  document.getElementById('form-title').textContent = f ? '事業所を編集' : '事業所を追加';
+  renderFormFields(S.editFacility);
+  openModal('m-form');
+  // scroll to top
+  document.querySelector('#m-form .modal-body').scrollTop=0;
+}
+function openFormEdit(){ if(S.detailId) openForm(S.facilities.find(f=>f.id===S.detailId)||null); }
+
+function renderFormFields(f){
+  const el = document.getElementById('form-fields');
+  const t = f.type||'hd';
+
+  // Helpers
+  const cbGroup=(id,opts,arr,cols=2)=>`<div class="checkbox-group">${opts.map((o,i)=>`
+    <label class="check-chip"><input type="checkbox" name="${id}" value="${escAttr(o)}"${arr?.includes(o)?' checked':''}>
+    <label>${esc(o)}</label></label>`).join('')}</div>`;
+  const rbGroup=(id,opts,val)=>`<div class="radio-group">${opts.map(o=>`
+    <label class="radio-chip"><input type="radio" name="${id}" value="${escAttr(o)}"${val===o?' checked':''}>
+    <label>${esc(o)}</label></label>`).join('')}</div>`;
+  const fg=(label,inner,hint='',req=false)=>`<div class="form-group">
+    <label class="form-label">${label}${req?'<span class="req">*</span>':''}</label>
+    ${inner}
+    ${hint?`<div class="form-hint">${hint}</div>`:''}
+  </div>`;
+  const textInput=(id,val='',ph='',type='text')=>`<input class="form-input" id="${id}" name="${id}" type="${type}" value="${escAttr(val)}" placeholder="${ph}">`;
+  const selectOpts=(id,opts,val,ph='選択してください')=>`<select class="form-select" id="${id}" name="${id}">
+    <option value="">${ph}</option>${opts.map(o=>`<option value="${escAttr(o)}"${val===o?' selected':''}>${esc(o)}</option>`).join('')}</select>`;
+  const textareaVoice=(id,val='',ph='')=>`<div class="voice-row">
+    <textarea class="form-textarea" id="${id}" name="${id}" placeholder="${ph}">${escAttr(val)}</textarea>
+    <button type="button" class="voice-btn" data-voice="${id}" onclick="startVoice('${id}')" title="音声入力">🎤</button>
+  </div>`;
+
+  let html = '';
+
+  // Service Type
+  html += fg('サービス種別',`<select class="form-select" id="f-type" name="type" onchange="onTypeChange(this.value)">
+    ${Object.entries(TYPES).map(([k,v])=>`<option value="${k}"${t===k?' selected':''}>${v.label}</option>`).join('')}
+  </select>`,'',true);
+
+  // Name (label changes for GH)
+  html += fg(t==='gh'?'住居名':'事業所名',textInput('f-name',f.name||'','事業所名を入力',),'',true);
+  html += fg('住所',textInput('f-address',f.address||'','住所を入力'));
+  html += fg('電話番号',textInput('f-tel',f.tel||'','例: 027-000-0000','tel'));
+
+  // Disabilities
+  html += fg('対応障害種別',cbGroup('disabilities',DISABILITIES,f.disabilities));
+
+  // Transit (not for NO_TRANSIT types)
+  if(!NO_TRANSIT.has(t)){
+    html += fg('送迎',rbGroup('送迎',TRANSIT_OPTS,f['送迎']));
+    html += fg('送迎エリア',textInput('f-transit-area',f['送迎エリア']||'','対応エリアを入力'));
+  }
+
+  // fitFor / comment (voice input)
+  html += fg('向いている方・家庭',textareaVoice('f-fitFor',f.fitFor||'','どんな方に向いているか、家庭環境など'));
+  html += fg('担当者コメント',textareaVoice('f-comment',f.comment||'','事業所の特徴や雰囲気など'));
+
+  // Type-specific section
+  const ts = renderTypeFormSection(t, f);
+  if(ts) html += `<div style="padding:0"><div class="section-divider">${TYPES[t]?.label||''}の詳細情報</div>${ts}</div>`;
+
+  el.innerHTML = html;
+}
+
+function renderTypeFormSection(t, f){
+  const fg=(label,inner,hint='')=>`<div class="form-group">
+    <label class="form-label">${label}</label>${inner}
+    ${hint?`<div class="form-hint">${hint}</div>`:''}</div>`;
+  const cbGroup=(id,opts,arr)=>`<div class="checkbox-group">${opts.map(o=>`
+    <label class="check-chip"><input type="checkbox" name="${id}" value="${escAttr(o)}"${arr?.includes(o)?' checked':''}>
+    <label>${esc(o)}</label></label>`).join('')}</div>`;
+  const rbGroup=(id,opts,val)=>`<div class="radio-group">${opts.map(o=>`
+    <label class="radio-chip"><input type="radio" name="${id}" value="${escAttr(o)}"${val===o?' checked':''}>
+    <label>${esc(o)}</label></label>`).join('')}</div>`;
+  const numInput=(id,val,ph)=>`<input class="form-input" id="${id}" name="${id}" type="number" min="0" value="${escAttr(val||'')}" placeholder="${ph}" inputmode="numeric">`;
+
+  switch(t){
+    case 'hd': return `
+      ${fg('対応学齢',cbGroup('ageGroups',AGE_GROUPS,f.ageGroups))}
+      ${fg('支援スタイル',cbGroup('supportStyle',SUPPORT_STYLE_HD,f.supportStyle))}`;
+    case 'cd': return `
+      ${fg('対応学齢',cbGroup('ageGroups',AGE_GROUPS,f.ageGroups))}
+      ${fg('支援スタイル',cbGroup('supportStyle',SUPPORT_STYLE_HD,f.supportStyle))}
+      ${fg('放デイ併設',rbGroup('withHd',['あり','なし'],f.withHd))}`;
+    case 'b': return `
+      ${fg('作業内容',cbGroup('workTypes',WORK_TYPES_B,f.workTypes))}
+      ${fg('支援スタイル',cbGroup('supportStyleB',SUPPORT_STYLE_B,f.supportStyleB))}
+      ${fg('平均工賃（月額・円）',numInput('f-avgWage',f.avgWage,'例: 15000'))}`;
+    case 'a': return `
+      ${fg('仕事内容',cbGroup('workTypesA',WORK_TYPES_A,f.workTypesA))}
+      ${fg('平均月額給与（円）',numInput('f-avgSalary',f.avgSalary,'例: 80000'))}
+      ${fg('施設外就労',rbGroup('outsideWork',['あり','なし'],f.outsideWork))}`;
+    case 'tr': return `
+      ${fg('一般就労実績（年間件数）',numInput('f-employmentCount',f.employmentCount,'例: 5'))}
+      ${fg('施設外就労',rbGroup('outsideWork',['あり','なし'],f.outsideWork))}
+      ${fg('月額工賃（円）',numInput('f-avgWageB',f.avgWageB,'例: 10000'))}`;
+    case 'gh': return `
+      ${fg('運営法人名',`<input class="form-input" id="f-operatorName" name="operatorName" type="text" value="${escAttr(f.operatorName||'')}" placeholder="法人名を入力">`)}
+      ${fg('定員',numInput('f-capacity',f.capacity,'この住居の定員を入力してください'),'この住居の定員を入力してください')}
+      ${fg('種別',rbGroup('ghType',GH_TYPES,f.ghType))}
+      ${fg('入居対象',rbGroup('ghGender',GH_GENDERS,f.ghGender))}
+      <div class="form-group">
+        <label class="form-label">月額費用内訳（円）</label>
+        <div class="cost-inputs">
+          <div><div class="form-hint" style="margin-bottom:4px">家賃</div><input class="form-input" name="ghRent" id="f-ghRent" type="number" min="0" inputmode="numeric" value="${escAttr(f.ghRent||'')}" placeholder="0" oninput="updateGhTotal()"></div>
+          <div><div class="form-hint" style="margin-bottom:4px">光熱費</div><input class="form-input" name="ghUtility" id="f-ghUtility" type="number" min="0" inputmode="numeric" value="${escAttr(f.ghUtility||'')}" placeholder="0" oninput="updateGhTotal()"></div>
+          <div><div class="form-hint" style="margin-bottom:4px">食費</div><input class="form-input" name="ghFood" id="f-ghFood" type="number" min="0" inputmode="numeric" value="${escAttr(f.ghFood||'')}" placeholder="0" oninput="updateGhTotal()"></div>
+          <div><div class="form-hint" style="margin-bottom:4px">日用品費</div><input class="form-input" name="ghDailyGoods" id="f-ghDailyGoods" type="number" min="0" inputmode="numeric" value="${escAttr(f.ghDailyGoods||'')}" placeholder="0" oninput="updateGhTotal()"></div>
+          <div style="grid-column:1/-1"><div class="form-hint" style="margin-bottom:4px">その他</div><input class="form-input" name="ghOther" id="f-ghOther" type="number" min="0" inputmode="numeric" value="${escAttr(f.ghOther||'')}" placeholder="0" oninput="updateGhTotal()"></div>
+        </div>
+        <div class="cost-total-disp" id="gh-cost-total">合計: ${ghCostTotal(f)>0?numFmt(ghCostTotal(f)):'—'}</div>
+      </div>
+      ${fg('設備',cbGroup('ghEquipment',GH_EQUIP,f.ghEquipment))}
+      ${fg('設備補足',`<input class="form-input" name="ghEquipmentNote" id="f-ghEquipmentNote" type="text" value="${escAttr(f.ghEquipmentNote||'')}" placeholder="補足事項を入力">`)}
+      ${fg('援助内容',cbGroup('ghSupport',GH_SUPPORT,f.ghSupport))}`;
+    default: return '';
+  }
+}
+
+function onTypeChange(newType){
+  const f = getFormData();
+  f.type = newType;
+  S.editFacility = {...(S.editFacility||{}), ...f, type:newType};
+  renderFormFields(S.editFacility);
+}
+
+function updateGhTotal(){
+  const ids=['f-ghRent','f-ghUtility','f-ghFood','f-ghDailyGoods','f-ghOther'];
+  const tot = ids.reduce((s,id)=>{ const n=Number(document.getElementById(id)?.value||0); return s+(isNaN(n)?0:n);},0);
+  const el = document.getElementById('gh-cost-total');
+  if(el) el.textContent = '合計: '+(tot>0?tot.toLocaleString('ja-JP')+'円':'—');
+}
+
+function getFormData(){
+  const form = document.getElementById('facility-form');
+  if(!form) return {};
+  const fd = new FormData(form);
+  const obj={};
+  // Single values
+  for(const [k,v] of fd.entries()){
+    if(ARRAY_FIELDS.has(k)){
+      if(!obj[k]) obj[k]=[];
+      obj[k].push(v);
+    } else {
+      obj[k]=v;
+    }
+  }
+  // Ensure all array fields exist
+  for(const k of ARRAY_FIELDS) if(!obj[k]) obj[k]=[];
+  // Named input fields
+  const namedIds={
+    'f-name':'name','f-address':'address','f-tel':'tel',
+    'f-transit-area':'送迎エリア','f-fitFor':'fitFor','f-comment':'comment',
+    'f-avgWage':'avgWage','f-avgSalary':'avgSalary','f-employmentCount':'employmentCount',
+    'f-avgWageB':'avgWageB','f-operatorName':'operatorName','f-capacity':'capacity',
+    'f-ghRent':'ghRent','f-ghUtility':'ghUtility','f-ghFood':'ghFood',
+    'f-ghDailyGoods':'ghDailyGoods','f-ghOther':'ghOther','f-ghEquipmentNote':'ghEquipmentNote',
+  };
+  for(const [domId,key] of Object.entries(namedIds)){
+    const el=document.getElementById(domId);
+    if(el) obj[key]=el.value;
+  }
+  return obj;
+}
+
+async function handleFormSubmit(e){
+  e.preventDefault();
+  const data = getFormData();
+  if(!data.name?.trim()){ showToast('事業所名を入力してください','error'); return; }
+  const facility = { ...(S.editFacility||{}), ...data };
+  try {
+    await saveFacility(facility);
+    closeModal('m-form');
+    renderList();
+    if(S.detailId===facility.id) openDetail(facility.id);
+  } catch(err){ showToast('保存エラー: '+err.message,'error'); }
+}
+
+// ════════════════════════════════════════════════
+// DELETE CONFIRM
+// ════════════════════════════════════════════════
+let _confirmResolve=null;
+function confirmDelete(){
+  const f = S.facilities.find(x=>x.id===S.detailId);
+  if(!f) return;
+  document.getElementById('confirm-msg').textContent=`「${f.name||'この事業所'}」を削除しますか？この操作は元に戻せません。`;
+  document.getElementById('confirm-dialog').classList.add('show');
+  document.getElementById('confirm-ok').onclick = async()=>{
+    closeConfirm(true);
+    try {
+      const id=S.detailId;
+      closeModal('m-detail');
+      await deleteFacility(id);
+      renderList();
+    } catch(e){ showToast('削除エラー: '+e.message,'error'); }
+  };
+}
+function closeConfirm(){ document.getElementById('confirm-dialog').classList.remove('show'); }
+
+// ════════════════════════════════════════════════
+// VOICE INPUT
+// ════════════════════════════════════════════════
+let _recognition=null;
+function startVoice(fieldId){
+  const SR = window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){ showToast('このブラウザは音声入力に対応していません','error'); return; }
+  if(_recognition){ _recognition.stop(); _recognition=null; return; }
+  const r = new SR();
+  r.lang='ja-JP'; r.continuous=false; r.interimResults=false;
+  _recognition=r;
+  r.onstart=()=>{ document.querySelector(`[data-voice="${fieldId}"]`)?.classList.add('recording'); };
+  r.onresult=(e)=>{
+    const t=e.results[0][0].transcript;
+    const el=document.getElementById(fieldId);
+    if(el){ el.value=(el.value?el.value+'\n':'')+t; el.dispatchEvent(new Event('input')); }
+  };
+  r.onerror=(e)=>{ showToast('音声認識エラー','error'); };
+  r.onend=()=>{ document.querySelector(`[data-voice="${fieldId}"]`)?.classList.remove('recording'); _recognition=null; };
+  r.start();
+}
+
+// ════════════════════════════════════════════════
+// HTML UTILS
+// ════════════════════════════════════════════════
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ════════════════════════════════════════════════
+// APP INIT
+// ════════════════════════════════════════════════
+async function init(){
+  // Show loading
+  document.getElementById('s-load').style.display='flex';
+  try {
+    const account = await initMsal();
+    if(!account){
+      document.getElementById('s-load').style.display='none';
+      document.getElementById('s-login').classList.add('show');
+      return;
+    }
+    S.user = { name: account.name, username: account.username };
+    document.getElementById('hdr-user').textContent = account.name||account.username;
+
+    // Render static parts
+    renderTabs();
+    renderFilters();
+    document.getElementById('s-load').style.display='none';
+    document.getElementById('s-main').classList.add('show');
+
+    // Show skeleton while loading
+    document.getElementById('list').innerHTML='<div class="inline-loader"><div class="mini-spin"></div></div>';
+
+    await loadData();
+    renderList();
+  } catch(e){
+    document.getElementById('s-load').style.display='none';
+    document.getElementById('s-login').classList.add('show');
+    console.error('Init error:',e);
+    if(e.message) showToast('エラー: '+e.message,'error');
+  }
+}
+
+// Register service worker
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+
+init();
+</script>
+</body>
+</html>
