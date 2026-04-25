@@ -64,7 +64,7 @@ a{color:var(--primary);text-decoration:none}
 /* ─── MAIN SCREEN ─── */
 #s-main{position:fixed;inset:0;display:none;flex-direction:column}
 #s-main.show{display:flex}
-header{height:var(--hh);padding-top:var(--sat);background:var(--primary);color:#fff;
+header{height:calc(var(--hh) + var(--sat));padding-top:var(--sat);background:var(--primary);color:#fff;
   display:flex;align-items:center;padding-left:16px;padding-right:8px;gap:8px;
   position:relative;z-index:50;flex-shrink:0}
 .hdr-title{font-size:17px;font-weight:700;flex:1}
@@ -217,14 +217,14 @@ header{height:var(--hh);padding-top:var(--sat);background:var(--primary);color:#
 .check-chip label{display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;
   font-size:13px;border:1.5px solid var(--border);cursor:pointer;transition:all .15s;
   background:var(--input);color:var(--text);user-select:none}
-.check-chip input:checked+label{background:var(--primary);border-color:var(--primary);color:#fff}
+.check-chip input:checked+span{background:var(--primary);border-color:var(--primary);color:#fff}
 .radio-group{display:flex;flex-wrap:wrap;gap:8px}
 .radio-chip{position:relative}
 .radio-chip input{position:absolute;opacity:0;width:0;height:0}
 .radio-chip label{display:inline-flex;align-items:center;padding:6px 16px;border-radius:999px;
   font-size:13px;border:1.5px solid var(--border);cursor:pointer;transition:all .15s;
   background:var(--input);color:var(--text);user-select:none}
-.radio-chip input:checked+label{background:var(--primary);border-color:var(--primary);color:#fff}
+.radio-chip input:checked+span{background:var(--primary);border-color:var(--primary);color:#fff}
 .voice-row{display:flex;gap:8px;align-items:flex-start}
 .voice-row .form-textarea{flex:1}
 .voice-btn{flex-shrink:0;width:40px;height:40px;border-radius:8px;border:1.5px solid var(--border);
@@ -484,7 +484,6 @@ let S = {
   showFilters: false,
   detailId: null,
   editFacility: null,
-  toastTimer: null,
 };
 
 // ════════════════════════════════════════════════
@@ -600,8 +599,6 @@ async function createExcelFile(){
   showToast('Excelファイルを作成中…');
   const zip = new JSZip();
 
-  const fHdrs = F_HEADERS.join('\t');
-  const rHdrs = R_HEADERS.join('\t');
   // Build shared strings
   const allStrings = [...F_HEADERS, ...R_HEADERS, SHEET1, SHEET2];
   const ssXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -999,6 +996,7 @@ function ghCostTotal(f){
 // ════════════════════════════════════════════════
 function openDetail(id){
   S.detailId = id;
+  _revRating = 0;
   const f = S.facilities.find(x=>x.id===id);
   if(!f) return;
   const t = TYPES[f.type]||{label:f.type,color:'#6B7280',bg:'#f9fafb'};
@@ -1174,27 +1172,30 @@ function openForm(f){
   // scroll to top
   document.querySelector('#m-form .modal-body').scrollTop=0;
 }
-function openFormEdit(){ if(S.detailId) openForm(S.facilities.find(f=>f.id===S.detailId)||null); }
+function openFormEdit(){
+  if(!S.detailId) return;
+  const f = S.facilities.find(x=>x.id===S.detailId);
+  if(!f){ showToast('事業所が見つかりません','error'); return; }
+  openForm(f);
+}
 
 function renderFormFields(f){
   const el = document.getElementById('form-fields');
   const t = f.type||'hd';
 
   // Helpers
-  const cbGroup=(id,opts,arr,cols=2)=>`<div class="checkbox-group">${opts.map((o,i)=>`
+  const cbGroup=(id,opts,arr)=>`<div class="checkbox-group">${opts.map(o=>`
     <label class="check-chip"><input type="checkbox" name="${id}" value="${escAttr(o)}"${arr?.includes(o)?' checked':''}>
-    <label>${esc(o)}</label></label>`).join('')}</div>`;
+    <span>${esc(o)}</span></label>`).join('')}</div>`;
   const rbGroup=(id,opts,val)=>`<div class="radio-group">${opts.map(o=>`
     <label class="radio-chip"><input type="radio" name="${id}" value="${escAttr(o)}"${val===o?' checked':''}>
-    <label>${esc(o)}</label></label>`).join('')}</div>`;
+    <span>${esc(o)}</span></label>`).join('')}</div>`;
   const fg=(label,inner,hint='',req=false)=>`<div class="form-group">
     <label class="form-label">${label}${req?'<span class="req">*</span>':''}</label>
     ${inner}
     ${hint?`<div class="form-hint">${hint}</div>`:''}
   </div>`;
   const textInput=(id,val='',ph='',type='text')=>`<input class="form-input" id="${id}" name="${id}" type="${type}" value="${escAttr(val)}" placeholder="${ph}">`;
-  const selectOpts=(id,opts,val,ph='選択してください')=>`<select class="form-select" id="${id}" name="${id}">
-    <option value="">${ph}</option>${opts.map(o=>`<option value="${escAttr(o)}"${val===o?' selected':''}>${esc(o)}</option>`).join('')}</select>`;
   const textareaVoice=(id,val='',ph='')=>`<div class="voice-row">
     <textarea class="form-textarea" id="${id}" name="${id}" placeholder="${ph}">${escAttr(val)}</textarea>
     <button type="button" class="voice-btn" data-voice="${id}" onclick="startVoice('${id}')" title="音声入力">🎤</button>
@@ -1238,10 +1239,10 @@ function renderTypeFormSection(t, f){
     ${hint?`<div class="form-hint">${hint}</div>`:''}</div>`;
   const cbGroup=(id,opts,arr)=>`<div class="checkbox-group">${opts.map(o=>`
     <label class="check-chip"><input type="checkbox" name="${id}" value="${escAttr(o)}"${arr?.includes(o)?' checked':''}>
-    <label>${esc(o)}</label></label>`).join('')}</div>`;
+    <span>${esc(o)}</span></label>`).join('')}</div>`;
   const rbGroup=(id,opts,val)=>`<div class="radio-group">${opts.map(o=>`
     <label class="radio-chip"><input type="radio" name="${id}" value="${escAttr(o)}"${val===o?' checked':''}>
-    <label>${esc(o)}</label></label>`).join('')}</div>`;
+    <span>${esc(o)}</span></label>`).join('')}</div>`;
   const numInput=(id,val,ph)=>`<input class="form-input" id="${id}" name="${id}" type="number" min="0" value="${escAttr(val||'')}" placeholder="${ph}" inputmode="numeric">`;
 
   switch(t){
@@ -1349,7 +1350,6 @@ async function handleFormSubmit(e){
 // ════════════════════════════════════════════════
 // DELETE CONFIRM
 // ════════════════════════════════════════════════
-let _confirmResolve=null;
 function confirmDelete(){
   const f = S.facilities.find(x=>x.id===S.detailId);
   if(!f) return;
