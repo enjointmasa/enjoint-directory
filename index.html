@@ -10,7 +10,6 @@
 <title>事業所図鑑</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
-<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/dist/index.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3/dist/jszip.min.js"></script>
 <style>
 :root{
@@ -502,7 +501,30 @@ const msalCfg = {
 };
 let msalApp = null;
 
+async function loadScript(url){
+  return new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src=url; s.onload=resolve; s.onerror=reject;
+    document.head.appendChild(s);
+  });
+}
+
+async function ensureMsal(){
+  if(window.msal||window.msalBrowser) return;
+  const urls=[
+    'https://alcdn.msauth.net/browser/3.0.0/js/msal-browser.min.js',
+    'https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js',
+    'https://unpkg.com/@azure/msal-browser@3/lib/msal-browser.min.js',
+    'https://cdn.jsdelivr.net/npm/@azure/msal-browser@2/lib/msal-browser.min.js',
+  ];
+  for(const url of urls){
+    try{ await loadScript(url); if(window.msal||window.msalBrowser) return; }catch{}
+  }
+  throw new Error('MSAL library not loaded — インターネット接続を確認してください');
+}
+
 async function initMsal(){
+  await ensureMsal();
   const lib = window.msal || window.msalBrowser;
   if(!lib) throw new Error('MSAL library not loaded');
   msalApp = new lib.PublicClientApplication(msalCfg);
