@@ -11,6 +11,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <script src="https://cdn.jsdelivr.net/npm/jszip@3/dist/jszip.min.js"></script>
+<script src="./msal.js"></script>
 <style>
 :root{
   --primary:#1D9E75;--primary-dk:#168a64;--primary-lt:#e6f5f0;
@@ -510,16 +511,9 @@ async function loadScript(url){
 
 async function ensureMsal(){
   if(window.msal||window.msalBrowser) return;
-  const urls=[
-    'https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/dist/index.umd.min.js',
-    'https://unpkg.com/@azure/msal-browser@3/dist/index.umd.min.js',
-    'https://cdn.jsdelivr.net/npm/@azure/msal-browser@2/dist/msal-browser.min.js',
-    'https://unpkg.com/@azure/msal-browser@2/dist/msal-browser.min.js',
-  ];
-  for(const url of urls){
-    try{ await loadScript(url); if(window.msal||window.msalBrowser) return; }catch{}
-  }
-  throw new Error('MSAL library not loaded — インターネット接続を確認してください');
+  // msal.js is bundled locally — if not yet loaded, try loading it
+  try{ await loadScript('./msal.js'); if(window.msal||window.msalBrowser) return; }catch{}
+  throw new Error('MSAL library not loaded — ページを再読み込みしてください');
 }
 
 async function initMsal(){
