@@ -511,10 +511,10 @@ async function loadScript(url){
 async function ensureMsal(){
   if(window.msal||window.msalBrowser) return;
   const urls=[
-    'https://alcdn.msauth.net/browser/3.0.0/js/msal-browser.min.js',
-    'https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js',
-    'https://unpkg.com/@azure/msal-browser@3/lib/msal-browser.min.js',
-    'https://cdn.jsdelivr.net/npm/@azure/msal-browser@2/lib/msal-browser.min.js',
+    'https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/dist/index.umd.min.js',
+    'https://unpkg.com/@azure/msal-browser@3/dist/index.umd.min.js',
+    'https://cdn.jsdelivr.net/npm/@azure/msal-browser@2/dist/msal-browser.min.js',
+    'https://unpkg.com/@azure/msal-browser@2/dist/msal-browser.min.js',
   ];
   for(const url of urls){
     try{ await loadScript(url); if(window.msal||window.msalBrowser) return; }catch{}
