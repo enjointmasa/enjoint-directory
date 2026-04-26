@@ -1,4 +1,4 @@
-const CACHE = 'enjoint-directory-v2';
+const CACHE = 'enjoint-directory-v3';
 const STATIC = ['./', './index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', e => {
