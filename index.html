@@ -536,7 +536,13 @@ async function initMsal(){
 }
 
 async function login(){
-  await msalApp.loginRedirect({ scopes:SCOPES, prompt:'select_account' });
+  try {
+    if(!msalApp){ await init(); return; }
+    await msalApp.loginRedirect({ scopes:SCOPES, prompt:'select_account' });
+  } catch(e){
+    console.error('Login error:', e);
+    showToast('ログインエラー: '+(e.message||String(e)), 'error');
+  }
 }
 
 async function logout(){
