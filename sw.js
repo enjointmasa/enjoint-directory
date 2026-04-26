@@ -1,5 +1,5 @@
-const CACHE = 'enjoint-directory-v4';
-const STATIC = ['./', './index.html', './manifest.json', './icon.svg', './msal.js'];
+const CACHE = 'enjoint-directory-v5';
+const STATIC = ['./', './index.html', './manifest.json', './icon.svg', './msal.js', './jszip.min.js'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(STATIC)));
