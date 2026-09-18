@@ -420,14 +420,17 @@ const F_HEADERS = [
   'fitFor','comment','updatedBy','updatedAt','ageGroups','supportStyle','withHd',
   'workTypes','supportStyleB','avgWage','workTypesA','avgSalary','outsideWork',
   'employmentCount','avgWageB','ghType','ghGender','operatorName','capacity',
-  'ghRent','ghUtility','ghFood','ghDailyGoods','ghOther','ghEquipment','ghEquipmentNote','ghSupport'
+  'ghRent','ghUtility','ghFood','ghDailyGoods','ghOther','ghEquipment','ghEquipmentNote','ghSupport',
+  'ssType','ssTarget','ssMedical','ssEmergency','ssMeal','ssCost',
+  'jtUserCount','jtRetentionRate','jtWithService','jtAcceptOther',
+  'lcMedical','lcSevere','lcBath','lcActivities','lcWage'
 ];
 const R_HEADERS = ['reviewId','facilityId','reviewerName','rating','comment','reviewDate'];
 const ARRAY_FIELDS = new Set([
   'disabilities','ageGroups','supportStyle','workTypes','supportStyleB',
-  'workTypesA','ghEquipment','ghSupport'
+  'workTypesA','ghEquipment','ghSupport','jtWithService','lcActivities'
 ]);
-const NO_TRANSIT = new Set(['vn','vi','ms','ps','vd','ot']);
+const NO_TRANSIT = new Set(['jt','vn','vi','ms','ps','vd','ot']);
 
 const TYPES = {
   hd:{ label:'放課後等デイ',    short:'放デイ',  color:'#7C3AED', bg:'#f3f0ff' },
@@ -435,7 +438,10 @@ const TYPES = {
   b: { label:'就労継続B型',     short:'B型',     color:'#0891B2', bg:'#ecfeff' },
   a: { label:'就労継続A型',     short:'A型',     color:'#D97706', bg:'#fffbeb' },
   tr:{ label:'就労移行支援',    short:'移行',    color:'#059669', bg:'#ecfdf5' },
+  jt:{ label:'就労定着支援',    short:'定着',    color:'#4F46E5', bg:'#eef2ff' },
+  lc:{ label:'生活介護',        short:'生介',    color:'#EA580C', bg:'#fff7ed' },
   gh:{ label:'グループホーム',  short:'GH',      color:'#7C3AED', bg:'#faf5ff' },
+  ss:{ label:'短期入所',        short:'短期',    color:'#0D9488', bg:'#f0fdfa' },
   vn:{ label:'訪問看護',        short:'訪看',    color:'#DC2626', bg:'#fef2f2' },
   vi:{ label:'訪問介護',        short:'訪介',    color:'#92400E', bg:'#fffbeb' },
   ms:{ label:'移動支援',        short:'移動',    color:'#1D4ED8', bg:'#eff6ff' },
@@ -450,7 +456,10 @@ const ALL_TABS = [
   {id:'b',   label:'就労B型'},
   {id:'a',   label:'就労A型'},
   {id:'tr',  label:'就労移行'},
+  {id:'jt',  label:'就労定着'},
+  {id:'lc',  label:'生活介護'},
   {id:'gh',  label:'グループホーム'},
+  {id:'ss',  label:'短期入所'},
   {id:'vn',  label:'訪問看護'},
   {id:'vi',  label:'訪問介護'},
   {id:'ms',  label:'移動支援'},
@@ -470,6 +479,12 @@ const GH_GENDERS = ['男性のみ','女性のみ','男女いずれも可'];
 const GH_EQUIP   = ['冷蔵庫','洗濯機','電子レンジ','テレビ','エアコン','ベッド','WiFi','駐車場'];
 const GH_SUPPORT = ['食事提供(朝)','食事提供(昼)','食事提供(晩)','夜間支援員の配置','受診同行','行政手続き等の同行'];
 const TRANSIT_OPTS = ['あり','なし','要相談'];
+const AVAIL_OPTS   = ['可','不可','要相談'];
+const YESNO_OPTS   = ['あり','なし'];
+const SS_TYPES     = ['併設型','空床利用型','単独型'];
+const SS_TARGETS   = ['児童','成人','どちらも可'];
+const JT_SERVICES  = ['就労移行支援','就労継続A型','就労継続B型','自立訓練','併設なし'];
+const LC_ACTIVITIES= ['創作活動','生産活動','機能訓練','外出・余暇支援','音楽・レクリエーション','農作業','日常生活訓練'];
 
 // ════════════════════════════════════════════════
 // STATE
@@ -843,6 +858,13 @@ function getFiltered(){
     if(f.minSalary && Number(fac.avgSalary)<200000) return false;
     if(f.outsideWork && fac.outsideWork!=='あり') return false;
     if(f.hasEmployment && (!fac.employmentCount || Number(fac.employmentCount)<1)) return false;
+    if(f.jtAcceptOther && fac.jtAcceptOther!=='可') return false;
+    if(f.lcMedical && fac.lcMedical!=='可') return false;
+    if(f.lcSevere && fac.lcSevere!=='可') return false;
+    if(f.lcBath && fac.lcBath!=='あり') return false;
+    if(f.ssType && fac.ssType!==f.ssType) return false;
+    if(f.ssMedical && fac.ssMedical!=='可') return false;
+    if(f.ssEmergency && fac.ssEmergency!=='可') return false;
     if(f.nightSupport && !fac.ghSupport?.includes('夜間支援員の配置')) return false;
     if(f.ghType && fac.ghType!==f.ghType) return false;
     if(f.ghGender && fac.ghGender!==f.ghGender) return false;
@@ -912,6 +934,18 @@ function renderFilters(){
       <button class="toggle-chip${f.outsideWork?' on':''}" onclick="toggleFilterBool('outsideWork')">施設外就労あり</button>
     </div></div>`;
   }
+  if(tab==='jt'){
+    html += `<div class="filter-section"><div class="chip-row">
+      <button class="toggle-chip${f.jtAcceptOther?' on':''}" onclick="toggleFilterBool('jtAcceptOther')">他機関からの受入可</button>
+    </div></div>`;
+  }
+  if(tab==='lc'){
+    html += `<div class="filter-section"><div class="chip-row">
+      <button class="toggle-chip${f.lcMedical?' on':''}" onclick="toggleFilterBool('lcMedical')">医療的ケア可</button>
+      <button class="toggle-chip${f.lcSevere?' on':''}" onclick="toggleFilterBool('lcSevere')">強度行動障害対応可</button>
+      <button class="toggle-chip${f.lcBath?' on':''}" onclick="toggleFilterBool('lcBath')">入浴サービスあり</button>
+    </div></div>`;
+  }
   if(tab==='gh'){
     html += `<div class="filter-section"><div class="filter-label">種別</div>
       <div class="chip-row">${GH_TYPES.map(t=>`
@@ -923,6 +957,16 @@ function renderFilters(){
       `).join('')}</div></div>
       <div class="filter-section"><div class="chip-row">
         <button class="toggle-chip${f.nightSupport?' on':''}" onclick="toggleFilterBool('nightSupport')">夜間支援員あり</button>
+      </div></div>`;
+  }
+  if(tab==='ss'){
+    html += `<div class="filter-section"><div class="filter-label">種別</div>
+      <div class="chip-row">${SS_TYPES.map(t=>`
+        <button class="chip${f.ssType===t?' on':''}" onclick="setFilterVal('ssType','${t}')">${t}</button>
+      `).join('')}</div></div>
+      <div class="filter-section"><div class="chip-row">
+        <button class="toggle-chip${f.ssMedical?' on':''}" onclick="toggleFilterBool('ssMedical')">医療的ケア可</button>
+        <button class="toggle-chip${f.ssEmergency?' on':''}" onclick="toggleFilterBool('ssEmergency')">緊急時受入可</button>
       </div></div>`;
   }
   fp.innerHTML = html;
@@ -971,6 +1015,11 @@ function renderCard(f){
   if(f.type==='b' && f.avgWage) meta.push(`<span class="meta-tag">💴 工賃 ${numFmt(f.avgWage)}</span>`);
   if(f.type==='a' && f.avgSalary) meta.push(`<span class="meta-tag">💴 給与 ${numFmt(f.avgSalary)}</span>`);
   if(f.type==='tr' && f.employmentCount) meta.push(`<span class="meta-tag">✅ 就労実績 ${f.employmentCount}件</span>`);
+  if(f.type==='jt' && f.jtRetentionRate) meta.push(`<span class="meta-tag">📈 定着率 ${esc(f.jtRetentionRate)}%</span>`);
+  if(f.type==='lc' && f.lcMedical==='可') meta.push('<span class="meta-tag">🩺 医療的ケア可</span>');
+  if(f.type==='lc' && f.lcBath==='あり') meta.push('<span class="meta-tag">🛁 入浴あり</span>');
+  if(f.type==='ss' && f.ssMedical==='可') meta.push('<span class="meta-tag">🩺 医療的ケア可</span>');
+  if(f.type==='ss' && f.ssEmergency==='可') meta.push('<span class="meta-tag">🚨 緊急受入可</span>');
   if(f.type==='gh' && f.ghSupport?.includes('夜間支援員の配置')) meta.push('<span class="meta-tag">🌙 夜間支援</span>');
   if(f.type==='cd' && f.withHd==='あり') meta.push('<span class="meta-tag">放デイ併設</span>');
   const ghTotal = f.type==='gh' ? ghCostTotal(f) : 0;
@@ -1073,6 +1122,35 @@ function renderTypeDetail(f){
       if(f.employmentCount) h+=fieldRow('一般就労実績（年間）',`<span class="highlight">${esc(f.employmentCount)}件</span>`);
       if(f.outsideWork) h+=fieldRow('施設外就労',`<span class="highlight">${esc(f.outsideWork)}</span>`);
       if(f.avgWageB) h+=fieldRow('月額工賃',`<span class="highlight">${numFmt(f.avgWageB)}</span>`);
+      return h?`<div class="section"><div class="section-title">サービス詳細</div>${h}</div>`:'';
+    }
+    case 'jt': {
+      let h='';
+      if(f.jtUserCount) h+=fieldRow('支援中の人数',`<span class="highlight">${esc(f.jtUserCount)}名</span>`);
+      if(f.jtRetentionRate) h+=fieldRow('職場定着率',`<span class="highlight">${esc(f.jtRetentionRate)}%</span>`);
+      if(f.jtWithService?.length) h+=fieldRow('併設サービス',chipsDisplay(f.jtWithService));
+      if(f.jtAcceptOther) h+=fieldRow('他機関からの受入',`<span class="highlight">${esc(f.jtAcceptOther)}</span>`);
+      return h?`<div class="section"><div class="section-title">サービス詳細</div>${h}</div>`:'';
+    }
+    case 'lc': {
+      let h='';
+      if(f.capacity) h+=fieldRow('定員',`${esc(f.capacity)}名`);
+      if(f.lcActivities?.length) h+=fieldRow('活動内容',chipsDisplay(f.lcActivities));
+      if(f.lcMedical) h+=fieldRow('医療的ケア',`<span class="highlight">${esc(f.lcMedical)}</span>`);
+      if(f.lcSevere) h+=fieldRow('強度行動障害対応',`<span class="highlight">${esc(f.lcSevere)}</span>`);
+      if(f.lcBath) h+=fieldRow('入浴サービス',`<span class="highlight">${esc(f.lcBath)}</span>`);
+      if(f.lcWage) h+=fieldRow('平均工賃（月額）',`<span class="highlight">${numFmt(f.lcWage)}</span>`);
+      return h?`<div class="section"><div class="section-title">サービス詳細</div>${h}</div>`:'';
+    }
+    case 'ss': {
+      let h='';
+      if(f.capacity) h+=fieldRow('定員',`${esc(f.capacity)}名`);
+      if(f.ssType) h+=fieldRow('種別',`<span class="highlight">${esc(f.ssType)}</span>`);
+      if(f.ssTarget) h+=fieldRow('受入対象',`<span class="highlight">${esc(f.ssTarget)}</span>`);
+      if(f.ssMedical) h+=fieldRow('医療的ケア',`<span class="highlight">${esc(f.ssMedical)}</span>`);
+      if(f.ssEmergency) h+=fieldRow('緊急時受入',`<span class="highlight">${esc(f.ssEmergency)}</span>`);
+      if(f.ssMeal) h+=fieldRow('食事提供',`<span class="highlight">${esc(f.ssMeal)}</span>`);
+      if(f.ssCost) h+=fieldRow('利用料の目安',esc(f.ssCost));
       return h?`<div class="section"><div class="section-title">サービス詳細</div>${h}</div>`:'';
     }
     case 'gh': {
@@ -1265,6 +1343,26 @@ function renderTypeFormSection(t, f){
       ${fg('一般就労実績（年間件数）',numInput('f-employmentCount',f.employmentCount,'例: 5'))}
       ${fg('施設外就労',rbGroup('outsideWork',['あり','なし'],f.outsideWork))}
       ${fg('月額工賃（円）',numInput('f-avgWageB',f.avgWageB,'例: 10000'))}`;
+    case 'jt': return `
+      ${fg('支援中の人数',numInput('f-jtUserCount',f.jtUserCount,'例: 12'))}
+      ${fg('職場定着率（%）',numInput('f-jtRetentionRate',f.jtRetentionRate,'例: 85'))}
+      ${fg('併設サービス',cbGroup('jtWithService',JT_SERVICES,f.jtWithService))}
+      ${fg('他機関からの受入',rbGroup('jtAcceptOther',AVAIL_OPTS,f.jtAcceptOther))}`;
+    case 'lc': return `
+      ${fg('定員',numInput('f-capacity',f.capacity,'例: 20'))}
+      ${fg('活動内容',cbGroup('lcActivities',LC_ACTIVITIES,f.lcActivities))}
+      ${fg('医療的ケア',rbGroup('lcMedical',AVAIL_OPTS,f.lcMedical))}
+      ${fg('強度行動障害対応',rbGroup('lcSevere',AVAIL_OPTS,f.lcSevere))}
+      ${fg('入浴サービス',rbGroup('lcBath',YESNO_OPTS,f.lcBath))}
+      ${fg('平均工賃（月額・円）',numInput('f-lcWage',f.lcWage,'例: 5000'))}`;
+    case 'ss': return `
+      ${fg('定員',numInput('f-capacity',f.capacity,'例: 6'))}
+      ${fg('種別',rbGroup('ssType',SS_TYPES,f.ssType))}
+      ${fg('受入対象',rbGroup('ssTarget',SS_TARGETS,f.ssTarget))}
+      ${fg('医療的ケア',rbGroup('ssMedical',AVAIL_OPTS,f.ssMedical))}
+      ${fg('緊急時受入',rbGroup('ssEmergency',AVAIL_OPTS,f.ssEmergency))}
+      ${fg('食事提供',rbGroup('ssMeal',YESNO_OPTS,f.ssMeal))}
+      ${fg('利用料の目安',`<input class="form-input" id="f-ssCost" name="ssCost" type="text" value="${escAttr(f.ssCost||'')}" placeholder="例: 1泊 実費2,000円程度">`)}`;
     case 'gh': return `
       ${fg('運営法人名',`<input class="form-input" id="f-operatorName" name="operatorName" type="text" value="${escAttr(f.operatorName||'')}" placeholder="法人名を入力">`)}
       ${fg('定員',numInput('f-capacity',f.capacity,'この住居の定員を入力してください'),'この住居の定員を入力してください')}
@@ -1324,6 +1422,8 @@ function getFormData(){
     'f-transit-area':'送迎エリア','f-fitFor':'fitFor','f-comment':'comment',
     'f-avgWage':'avgWage','f-avgSalary':'avgSalary','f-employmentCount':'employmentCount',
     'f-avgWageB':'avgWageB','f-operatorName':'operatorName','f-capacity':'capacity',
+    'f-jtUserCount':'jtUserCount','f-jtRetentionRate':'jtRetentionRate',
+    'f-lcWage':'lcWage','f-ssCost':'ssCost',
     'f-ghRent':'ghRent','f-ghUtility':'ghUtility','f-ghFood':'ghFood',
     'f-ghDailyGoods':'ghDailyGoods','f-ghOther':'ghOther','f-ghEquipmentNote':'ghEquipmentNote',
   };

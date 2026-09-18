@@ -1,4 +1,4 @@
-const CACHE = 'enjoint-directory-v6';
+const CACHE = 'enjoint-directory-v7';
 // These large library files are stable — cache-first is fine
 const LIB_CACHE = ['/enjoint-directory/msal.js', '/enjoint-directory/jszip.min.js'];
 
